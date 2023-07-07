@@ -20,7 +20,7 @@ def get_pdf_text(pdf):
         text = ""
         p = 0
         pdf_reader = PdfReader(pdf)
-        while len(text) <= 6000:
+        while len(text) <= 8000:
             page = pdf_reader.pages[p]
             text += remove_header_footer(page.extract_text())
             p = p + 1
@@ -28,7 +28,13 @@ def get_pdf_text(pdf):
         print("invalid PDF file, please check your file extension.")
         exit(2)
     t = "".join([s for s in text.splitlines(True) if s.strip("\r\n")])
-    return t
+    t = re.sub(r'\n\s*\n','\n', t, re.MULTILINE)
+    # Remove mails
+    t = re.sub(r'[\w\.-]+@[\w\.-]+', '', t)
+    # Remove urls
+    t = re.sub(r'''(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))''', " ", t)
+
+    return re.sub(r'http\S+', '', t)
 
 def remove_header_footer(pdf_extracted_text):
         page_format_pattern = r'([page])'
@@ -57,7 +63,6 @@ def get_text_chunks(text):
 
     return chunks
 
-
 def get_vectorstore(text_chunks):
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
@@ -65,7 +70,7 @@ def get_vectorstore(text_chunks):
 
 
 def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI(model="gpt-3.5-turbo-16k-0613", max_tokens = 400)
+    llm = ChatOpenAI(model="gpt-3.5-turbo-16k-0613")
 
     memory = ConversationBufferMemory(
         memory_key='chat_history', return_messages=True,)
@@ -83,7 +88,6 @@ def parse_args():
     argsParser.add_argument('-f', '--file', action='store', dest='filepath', default='', help='The PDF file that will be used', required=True)
     args = argsParser.parse_args()
     filepath = os.path.normpath(args.filepath)
-
 
 def main():
     load_dotenv()
@@ -105,18 +109,20 @@ def main():
         exit(2)
 
     raw_text = get_pdf_text(filepath)
+
     text_chunks = get_text_chunks(raw_text)
 #     # create vector store
     vectorstore = get_vectorstore(text_chunks)
     conversation = get_conversation_chain(vectorstore)
 
-    prompt_question1 = """
+    #https://platform.openai.com/tokenizer
+    prompt_question = """
     En format JSON avec clé underscored anglais, quel est le nom,
     la coleur, le fabricant et les substances (nom et cas) du produit,
     quelles sont les mentions de danger (phrases H), les mentions additionelles (phrases EUH),
     les mentions de Conseils de prudence (phrases P), la mention d'avertissement et les pictogrammes de danger (Lister uniquement les codes sans explication) ?"
     """
-    response = conversation({'question': prompt_question1})
+    response = conversation({'question': prompt_question})
 
     print(response['answer'])
 
