@@ -20,7 +20,7 @@ def get_pdf_text(pdf):
         text = ""
         p = 0
         pdf_reader = PdfReader(pdf)
-        while len(text) <= 10000:
+        while len(text) <= 6000:
             page = pdf_reader.pages[p]
             text += remove_header_footer(page.extract_text())
             p = p + 1
@@ -65,14 +65,13 @@ def get_vectorstore(text_chunks):
 
 
 def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI()
+    llm = ChatOpenAI(model="gpt-3.5-turbo-16k-0613", max_tokens = 400)
 
     memory = ConversationBufferMemory(
         memory_key='chat_history', return_messages=True,)
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vectorstore.as_retriever(),
-
         memory=memory
     )
     return conversation_chain
